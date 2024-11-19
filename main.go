@@ -49,7 +49,7 @@ func main() {
 	}
 
 	// Convert PING_INTERVAL to a time.Duration
-	pingIntervalDuration := time.Duration(pingInterval) * time.Second
+	pingIntervalDuration := time.Duration(pingInterval) * time.Millisecond
 
 	// Create a Config struct
 	config := Config{
