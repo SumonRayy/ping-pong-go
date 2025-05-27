@@ -29,13 +29,15 @@ func TestHealthCheckHandler(t *testing.T) {
 
 	// Check the status code is what we expect
 	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+		logy("ERROR", "handler returned wrong status code: got %v want %v", status, http.StatusOK)
+		t.Fail()
 	}
 
 	// Check the response body is what we expect
 	expected := "Ping-Pong Server is healthy\n"
 	if rr.Body.String() != expected {
-		t.Errorf("handler returned unexpected body: got %v want %v", rr.Body.String(), expected)
+		logy("ERROR", "handler returned unexpected body: got %v want %v", rr.Body.String(), expected)
+		t.Fail()
 	}
 }
 
@@ -55,7 +57,8 @@ func TestHealthCheckHandlerNoPing(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusServiceUnavailable {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusServiceUnavailable)
+		logy("ERROR", "handler returned wrong status code: got %v want %v", status, http.StatusServiceUnavailable)
+		t.Fail()
 	}
 }
 
@@ -65,7 +68,8 @@ func TestPingServer(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check if the custom header is present
 		if r.Header.Get("X-Custom-Header") != "test-value" {
-			t.Errorf("Expected custom header 'X-Custom-Header' with value 'test-value', got: %v", r.Header.Get("X-Custom-Header"))
+			logy("ERROR", "Expected custom header 'X-Custom-Header' with value 'test-value', got: %v", r.Header.Get("X-Custom-Header"))
+			t.Fail()
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -86,7 +90,8 @@ func TestPingServer(t *testing.T) {
 	// Verify lastPingSuccess was updated
 	lastPing := atomic.LoadInt64(&lastPingSuccess)
 	if lastPing == 0 {
-		t.Error("lastPingSuccess was not updated after successful ping")
+		logy("ERROR", "lastPingSuccess was not updated after successful ping")
+		t.Fail()
 	}
 }
 
@@ -120,6 +125,7 @@ func TestIntegration(t *testing.T) {
 	// Verify lastPingSuccess was updated
 	lastPing := atomic.LoadInt64(&lastPingSuccess)
 	if lastPing == 0 {
-		t.Error("lastPingSuccess was not updated after successful ping")
+		logy("ERROR", "lastPingSuccess was not updated after successful ping")
+		t.Fail()
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/joho/godotenv"
 )
 
@@ -22,6 +23,22 @@ type Config struct {
 var (
 	lastPingSuccess int64
 )
+
+// Add custom logger with timestamps and colors
+func logy(level string, format string, args ...interface{}) {
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	message := fmt.Sprintf(format, args...)
+	switch level {
+	case "INFO":
+		color.Green("[%s] INFO: %s", timestamp, message)
+	case "ERROR":
+		color.Red("[%s] ERROR: %s", timestamp, message)
+	case "WARN":
+		color.Yellow("[%s] WARN: %s", timestamp, message)
+	default:
+		color.White("[%s] %s: %s", timestamp, level, message)
+	}
+}
 
 // Add environment variable validations
 func validateEnv() error {
@@ -51,20 +68,27 @@ func validateEnv() error {
 }
 
 func main() {
-	log.Println("Starting Ping-Pong Server...")
+	// Print a colorful banner
+	color.Cyan("=========================================")
+	color.Cyan("      Welcome to Ping-Pong Service       ")
+	color.Cyan("=========================================")
+
+	logy("INFO", "Starting Ping-Pong Server...")
 
 	// Check if .env file exists
 	if _, err := os.Stat(".env"); err == nil {
 		// Read configuration from .env file
 		err := godotenv.Load()
 		if err != nil {
-			log.Fatalf("Error reading .env file: %v", err)
+			logy("ERROR", "Error reading .env file: %v", err)
+			os.Exit(1)
 		}
 	}
 
 	// Validate environment variables
 	if err := validateEnv(); err != nil {
-		log.Fatalf("Environment validation error: %v", err)
+		logy("ERROR", "Environment validation error: %v", err)
+		os.Exit(1)
 	}
 
 	// Read configuration from environment variables
@@ -75,7 +99,8 @@ func main() {
 	// Convert PING_INTERVAL to an integer
 	pingInterval, err := strconv.Atoi(pingIntervalStr)
 	if err != nil {
-		log.Fatalf("Error reading PING_INTERVAL environment variable: %v", err)
+		logy("ERROR", "Error reading PING_INTERVAL environment variable: %v", err)
+		os.Exit(1)
 	}
 
 	// Convert PING_INTERVAL to a time.Duration
@@ -98,7 +123,7 @@ func main() {
 
 	// Start the HTTP server for health checks
 	http.HandleFunc("/health", healthCheckHandler)
-	log.Println("Health check endpoint available at /health")
+	logy("INFO", "Health check endpoint available at /health")
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
@@ -112,11 +137,11 @@ func startPinging(config Config) {
 }
 
 func pingServer(config Config) {
-	log.Printf("Pinging server: %s\n", config.ServerURL)
+	logy("INFO", "Pinging server: %s", config.ServerURL)
 
 	req, err := http.NewRequest("GET", config.ServerURL, nil)
 	if err != nil {
-		log.Printf("Error creating request: %v\n", err)
+		logy("ERROR", "Error creating request: %v", err)
 		return
 	}
 
@@ -128,41 +153,41 @@ func pingServer(config Config) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("Error pinging server: %v\n", err)
+		logy("ERROR", "Error pinging server: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusOK {
 		atomic.StoreInt64(&lastPingSuccess, time.Now().Unix())
-		log.Println("Ping successful! to server :", config.ServerURL)
+		logy("INFO", "Ping successful! to server : %s", config.ServerURL)
 
 		// Call the server's own health check API
 		callOwnHealthCheck(config.OwnURL)
 	} else {
-		log.Printf("Ping failed with status code: %d\n", resp.StatusCode)
+		logy("ERROR", "Ping failed with status code: %d", resp.StatusCode)
 	}
 }
 
 func callOwnHealthCheck(ownURL string) {
 	if ownURL == "" {
-		log.Println("OwnURL not provided, skipping health check call")
+		logy("WARN", "OwnURL not provided, skipping health check call")
 		return
 	}
 
-	log.Printf("Calling own health check endpoint: %s\n", ownURL)
+	logy("INFO", "Calling own health check endpoint: %s", ownURL)
 
 	resp, err := http.Get(ownURL)
 	if err != nil {
-		log.Printf("Error calling own health check: %v\n", err)
+		logy("ERROR", "Error calling own health check: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusOK {
-		log.Println("Own health check successful!")
+		logy("INFO", "Own health check successful!")
 	} else {
-		log.Printf("Own health check failed with status code: %d\n", resp.StatusCode)
+		logy("ERROR", "Own health check failed with status code: %d", resp.StatusCode)
 	}
 }
 
