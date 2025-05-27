@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -46,14 +47,15 @@ func validateEnv() error {
 	ownURL := os.Getenv("OWN_URL")
 	pingIntervalStr := os.Getenv("PING_INTERVAL")
 
+	// Set default values if not provided
 	if serverURL == "" {
-		return fmt.Errorf("missing required environment variable: SERVER_URL")
+		serverURL = "http://localhost:8081/health" // Default to local test server
 	}
 	if ownURL == "" {
-		return fmt.Errorf("missing required environment variable: OWN_URL")
+		ownURL = "http://localhost:8080/health" // Default to own health endpoint
 	}
 	if pingIntervalStr == "" {
-		return fmt.Errorf("missing required environment variable: PING_INTERVAL")
+		pingIntervalStr = "2000" // Default to 2 seconds
 	}
 
 	pingInterval, err := strconv.Atoi(pingIntervalStr)
@@ -67,11 +69,39 @@ func validateEnv() error {
 	return nil
 }
 
-func main() {
-	// Print a colorful banner
+func printBanner() {
 	color.Cyan("=========================================")
 	color.Cyan("      Welcome to Ping-Pong Service       ")
 	color.Cyan("=========================================")
+}
+
+// Start local test server
+func startLocalTestServer() {
+	// Print a colorful banner
+	printBanner()
+
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, "Local test server is healthy")
+	})
+
+	logy("INFO", "Starting local test server on :8081")
+	logy("INFO", "Local test server is ready to accept requests")
+	log.Fatal(http.ListenAndServe(":8081", nil))
+}
+
+func main() {
+	// Parse command line arguments
+	useLocalServer := flag.Bool("local", false, "Use local test server")
+	flag.Parse()
+
+	if *useLocalServer {
+		startLocalTestServer()
+		return
+	}
+
+	// Print a colorful banner
+	printBanner()
 
 	logy("INFO", "Starting Ping-Pong Server...")
 
