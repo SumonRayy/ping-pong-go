@@ -93,11 +93,29 @@ func startLocalTestServer() {
 func main() {
 	// Parse command line arguments
 	useLocalServer := flag.Bool("local", false, "Use local test server")
+	serverURL := flag.String("server-url", "", "Server URL to ping")
+	pingInterval := flag.String("ping-interval", "", "Ping interval in milliseconds")
+	ownURL := flag.String("own-url", "", "Own health check URL")
+	maxRetries := flag.Int("max-retries", 0, "Maximum number of retries")
 	flag.Parse()
 
 	if *useLocalServer {
 		startLocalTestServer()
 		return
+	}
+
+	// Set environment variables from flags if provided
+	if *serverURL != "" {
+		os.Setenv("SERVER_URL", *serverURL)
+	}
+	if *pingInterval != "" {
+		os.Setenv("PING_INTERVAL", *pingInterval)
+	}
+	if *ownURL != "" {
+		os.Setenv("OWN_URL", *ownURL)
+	}
+	if *maxRetries > 0 {
+		os.Setenv("MAX_RETRIES", strconv.Itoa(*maxRetries))
 	}
 
 	// Print a colorful banner
@@ -122,25 +140,25 @@ func main() {
 	}
 
 	// Read configuration from environment variables
-	serverURL := os.Getenv("SERVER_URL")
-	ownURL := os.Getenv("OWN_URL")
+	serverURLEnv := os.Getenv("SERVER_URL")
+	ownURLEnv := os.Getenv("OWN_URL")
 	pingIntervalStr := os.Getenv("PING_INTERVAL")
 
 	// Convert PING_INTERVAL to an integer
-	pingInterval, err := strconv.Atoi(pingIntervalStr)
+	pingIntervalInt, err := strconv.Atoi(pingIntervalStr)
 	if err != nil {
 		logy("ERROR", "Error reading PING_INTERVAL environment variable: %v", err)
 		os.Exit(1)
 	}
 
 	// Convert PING_INTERVAL to a time.Duration
-	pingIntervalDuration := time.Duration(pingInterval) * time.Millisecond
+	pingIntervalDuration := time.Duration(pingIntervalInt) * time.Millisecond
 
 	// Create a Config struct
 	config := Config{
-		ServerURL:    serverURL,
+		ServerURL:    serverURLEnv,
 		PingInterval: pingIntervalDuration,
-		OwnURL:       ownURL,
+		OwnURL:       ownURLEnv,
 	}
 
 	// Start the ping routine
@@ -166,36 +184,51 @@ func startPinging(config Config) {
 	}
 }
 
+// Add retry mechanism for pingServer
 func pingServer(config Config) {
 	logy("INFO", "Pinging server: %s", config.ServerURL)
 
-	req, err := http.NewRequest("GET", config.ServerURL, nil)
-	if err != nil {
-		logy("ERROR", "Error creating request: %v", err)
-		return
-	}
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		req, err := http.NewRequest("GET", config.ServerURL, nil)
+		if err != nil {
+			logy("ERROR", "Error creating request: %v", err)
+			continue
+		}
 
-	// Add custom headers if provided
-	for key, value := range config.Headers {
-		req.Header.Set(key, value)
-	}
+		// Add custom headers if provided
+		for key, value := range config.Headers {
+			req.Header.Set(key, value)
+		}
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		logy("ERROR", "Error pinging server: %v", err)
-		return
-	}
-	defer resp.Body.Close()
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			logy("ERROR", "Error pinging server: %v", err)
+			if i < maxRetries-1 {
+				logy("INFO", "Retrying...")
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			return
+		}
+		defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK {
-		atomic.StoreInt64(&lastPingSuccess, time.Now().Unix())
-		logy("INFO", "Ping successful! to server : %s", config.ServerURL)
+		if resp.StatusCode == http.StatusOK {
+			atomic.StoreInt64(&lastPingSuccess, time.Now().Unix())
+			logy("INFO", "Ping successful! to server : %s", config.ServerURL)
 
-		// Call the server's own health check API
-		callOwnHealthCheck(config.OwnURL)
-	} else {
-		logy("ERROR", "Ping failed with status code: %d", resp.StatusCode)
+			// Call the server's own health check API
+			callOwnHealthCheck(config.OwnURL)
+			return
+		} else {
+			logy("ERROR", "Ping failed with status code: %d", resp.StatusCode)
+			if i < maxRetries-1 {
+				logy("INFO", "Retrying...")
+				time.Sleep(1 * time.Second)
+				continue
+			}
+		}
 	}
 }
 
