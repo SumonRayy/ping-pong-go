@@ -18,7 +18,7 @@ A robust health check service that pings a specified server and maintains its ow
 ## Installation
 
 ```bash
-go get github.com/yourusername/ping-pong
+go get github.com/SumonRayy/ping-pong-go
 ```
 
 ## Configuration
@@ -47,7 +47,7 @@ The service can be configured using environment variables or command-line flags.
 ### Basic Usage
 
 ```bash
-./ping-pong
+./ping-pong-go
 ```
 
 ### With Environment Variables
@@ -58,19 +58,19 @@ export PING_INTERVAL="5000"
 export OWN_URL="http://localhost:8080/health"
 export MAX_RETRIES="5"
 export MAX_CONSECUTIVE_FAILS="3"
-./ping-pong
+./ping-pong-go
 ```
 
 ### With Command-line Flags
 
 ```bash
-./ping-pong -server-url "http://example.com/health" -ping-interval "5000" -own-url "http://localhost:8080/health" -max-retries 5 -max-consecutive-fails 3
+./ping-pong-go -server-url "http://example.com/health" -ping-interval "5000" -own-url "http://localhost:8080/health" -max-retries 5 -max-consecutive-fails 3
 ```
 
 ### Start Local Test Server
 
 ```bash
-./ping-pong -local
+./ping-pong-go -local
 ```
 
 ## Health Check
@@ -98,8 +98,8 @@ go test -v
 Build and run using Docker:
 
 ```bash
-docker build -t ping-pong .
-docker run -p 8080:8080 ping-pong
+docker build -t ping-pong-go .
+docker run -p 8080:8080 ping-pong-go
 ```
 
 ## License
@@ -187,8 +187,8 @@ MAX_RETRIES=3
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/your-repo/ping-pong-service.git
-cd ping-pong-service
+git clone https://github.com/SumonRayy/ping-pong-go.git
+cd ping-pong-go
 ```
 
 ### Install Dependencies

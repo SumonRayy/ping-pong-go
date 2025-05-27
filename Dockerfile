@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -o ping-pong .
+RUN CGO_ENABLED=0 GOOS=linux go build -o ping-pong-go .
 
 # Use a minimal image to run the application
 FROM alpine:latest
@@ -23,10 +23,10 @@ FROM alpine:latest
 WORKDIR /app
 
 # Copy the binary from the builder stage
-COPY --from=builder /app/ping-pong .
+COPY --from=builder /app/ping-pong-go .
 
 # Expose the port the app runs on
 EXPOSE 8080
 
 # Command to run the application
-CMD ["./ping-pong"] 
+CMD ["./ping-pong-go"] 
