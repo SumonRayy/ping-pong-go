@@ -23,6 +23,33 @@ var (
 	lastPingSuccess int64
 )
 
+// Add environment variable validations
+func validateEnv() error {
+	serverURL := os.Getenv("SERVER_URL")
+	ownURL := os.Getenv("OWN_URL")
+	pingIntervalStr := os.Getenv("PING_INTERVAL")
+
+	if serverURL == "" {
+		return fmt.Errorf("missing required environment variable: SERVER_URL")
+	}
+	if ownURL == "" {
+		return fmt.Errorf("missing required environment variable: OWN_URL")
+	}
+	if pingIntervalStr == "" {
+		return fmt.Errorf("missing required environment variable: PING_INTERVAL")
+	}
+
+	pingInterval, err := strconv.Atoi(pingIntervalStr)
+	if err != nil {
+		return fmt.Errorf("invalid PING_INTERVAL: %v", err)
+	}
+	if pingInterval <= 0 {
+		return fmt.Errorf("PING_INTERVAL must be greater than 0")
+	}
+
+	return nil
+}
+
 func main() {
 	log.Println("Starting Ping-Pong Server...")
 
@@ -35,13 +62,15 @@ func main() {
 		}
 	}
 
+	// Validate environment variables
+	if err := validateEnv(); err != nil {
+		log.Fatalf("Environment validation error: %v", err)
+	}
+
 	// Read configuration from environment variables
 	serverURL := os.Getenv("SERVER_URL")
 	ownURL := os.Getenv("OWN_URL")
 	pingIntervalStr := os.Getenv("PING_INTERVAL")
-	if serverURL == "" || pingIntervalStr == "" || ownURL == "" {
-		log.Fatalf("Missing required environment variables: SERVER_URL, PING_INTERVAL, OWN_URL")
-	}
 
 	// Convert PING_INTERVAL to an integer
 	pingInterval, err := strconv.Atoi(pingIntervalStr)
