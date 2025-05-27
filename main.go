@@ -1,27 +1,31 @@
 package main
 
 import (
-	"fmt"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
-	"sync/atomic"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/joho/godotenv"
 )
 
+// Config struct to hold configuration settings
 type Config struct {
-	ServerURL    string
+	ServerURLs   []string
 	OwnURL       string
 	PingInterval time.Duration
 }
 
+// Global variable to store server statuses
 var (
-	lastPingSuccess int64
+	serverStatuses sync.Map
 )
 
+// Main function
 func main() {
 	log.Println("Starting Ping-Pong Server...")
 
@@ -35,26 +39,26 @@ func main() {
 	}
 
 	// Read configuration from environment variables
-	serverURL := os.Getenv("SERVER_URL")
+	serverURLsStr := os.Getenv("SERVER_URLS")
 	ownURL := os.Getenv("OWN_URL")
 	pingIntervalStr := os.Getenv("PING_INTERVAL")
-	if serverURL == "" || pingIntervalStr == "" || ownURL == "" {
-		log.Fatalf("Missing required environment variables: SERVER_URL, PING_INTERVAL, OWN_URL")
+
+	if serverURLsStr == "" || pingIntervalStr == "" || ownURL == "" {
+		log.Fatalf("Missing required environment variables: SERVER_URLS, PING_INTERVAL, OWN_URL")
 	}
 
-	// Convert PING_INTERVAL to an integer
+	// Parse server URLs
+	serverURLs := parseServerURLs(serverURLsStr)
+
+	// Convert PING_INTERVAL to a time.Duration
 	pingInterval, err := strconv.Atoi(pingIntervalStr)
 	if err != nil {
 		log.Fatalf("Error reading PING_INTERVAL environment variable: %v", err)
 	}
 
-	// Convert PING_INTERVAL to a time.Duration
-	pingIntervalDuration := time.Duration(pingInterval) * time.Millisecond
-
-	// Create a Config struct
 	config := Config{
-		ServerURL:    serverURL,
-		PingInterval: pingIntervalDuration,
+		ServerURLs:   serverURLs,
+		PingInterval: time.Duration(pingInterval) * time.Millisecond,
 		OwnURL:       ownURL,
 	}
 
@@ -72,36 +76,57 @@ func main() {
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
-func startPinging(config Config) {
-	ticker := time.NewTicker(config.PingInterval)
-	defer ticker.Stop()
+// Function to parse server URLs
+func parseServerURLs(urlsStr string) []string {
+	var urls []string
+	for _, url := range strings.Split(urlsStr, ",") {
+		trimmed := strings.TrimSpace(url)
+		if trimmed != "" {
+			urls = append(urls, trimmed)
+		}
+	}
+	return urls
+}
 
-	for range ticker.C {
-		pingServer(config)
+// Function to start the ping routine
+func startPinging(config Config) {
+	for _, serverURL := range config.ServerURLs {
+		go pingServerPeriodically(serverURL, config.PingInterval, config.OwnURL)
 	}
 }
 
-func pingServer(config Config) {
-	log.Printf("Pinging server: %s\n", config.ServerURL)
+func pingServerPeriodically(serverURL string, interval time.Duration, ownURL string) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 
-	resp, err := http.Get(config.ServerURL)
+	for range ticker.C {
+		pingServer(serverURL, ownURL)
+	}
+}
+
+// Function to ping a server
+func pingServer(serverURL, ownURL string) {
+	log.Printf("Pinging server: %s\n", serverURL)
+
+	resp, err := http.Get(serverURL)
 	if err != nil {
-		log.Printf("Error pinging server: %v\n", err)
+		log.Printf("Error pinging server %s: %v\n", serverURL, err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusOK {
-		atomic.StoreInt64(&lastPingSuccess, time.Now().Unix())
-		log.Println("Ping successful! to server :", config.ServerURL)
+		serverStatuses.Store(serverURL, time.Now().Unix()) // Store the timestamp
+		log.Printf("Ping successful for server: %s\n", serverURL)
 
 		// Call the server's own health check API
-		callOwnHealthCheck(config.OwnURL)
+		callOwnHealthCheck(ownURL)
 	} else {
-		log.Printf("Ping failed with status code: %d\n", resp.StatusCode)
+		log.Printf("Ping failed for server %s with status code: %d\n", serverURL, resp.StatusCode)
 	}
 }
 
+// Function to call the server's own health check API
 func callOwnHealthCheck(ownURL string) {
 	if ownURL == "" {
 		log.Println("OwnURL not provided, skipping health check call")
@@ -124,18 +149,24 @@ func callOwnHealthCheck(ownURL string) {
 	}
 }
 
+// Function to handle health check requests
 func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
-	lastPing := atomic.LoadInt64(&lastPingSuccess)
-	if lastPing == 0 {
-		http.Error(w, "No successful pings yet", http.StatusServiceUnavailable)
-		return
-	}
+	statusReport := make(map[string]string)
 
-	// Check if the last ping was within the last 15 minutes
-	if time.Since(time.Unix(lastPing, 0)) > 15*time.Minute {
-		http.Error(w, "Last successful ping was too long ago", http.StatusServiceUnavailable)
-		return
-	}
+	// Iterate over server statuses
+	serverStatuses.Range(func(key, value interface{}) bool {
+		serverURL := key.(string)
+		lastPing := value.(int64)
 
-	fmt.Fprintln(w, "Ping-Pong Server is healthy")
+		if time.Since(time.Unix(lastPing, 0)) > 15*time.Minute {
+			statusReport[serverURL] = "unhealthy"
+		} else {
+			statusReport[serverURL] = "healthy"
+		}
+
+		return true
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(statusReport)
 }
