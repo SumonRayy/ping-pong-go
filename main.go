@@ -1,3 +1,16 @@
+// Written by [SumonRayy](https://sumonrayy.xyz)
+// Follow me on Github: https://github.com/SumonRayy
+
+// Package pingpong provides a health check service that implements a ping-pong mechanism
+// between services. It can be used to monitor the health of distributed systems by
+// having services ping each other at configurable intervals.
+//
+// The package provides functionality for:
+// - Configurable ping intervals
+// - Custom headers for ping requests
+// - Health check endpoints
+// - Consecutive failure tracking
+// - Graceful shutdown on repeated failures
 package main
 
 import (

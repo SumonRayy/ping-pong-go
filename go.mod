@@ -1,4 +1,4 @@
-module ping-pong-go
+module github.com/SumonRayy/ping-pong-go
 
 go 1.22.9
 
