@@ -61,8 +61,12 @@ func TestHealthCheckHandlerNoPing(t *testing.T) {
 
 // TestPingServer tests the pingServer function
 func TestPingServer(t *testing.T) {
-	// Create a test server that returns 200 OK
+	// Create a test server that checks for a custom header
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check if the custom header is present
+		if r.Header.Get("X-Custom-Header") != "test-value" {
+			t.Errorf("Expected custom header 'X-Custom-Header' with value 'test-value', got: %v", r.Header.Get("X-Custom-Header"))
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -71,6 +75,9 @@ func TestPingServer(t *testing.T) {
 		ServerURL:    server.URL,
 		PingInterval: 1 * time.Second,
 		OwnURL:       "http://localhost:8080/health",
+		Headers: map[string]string{
+			"X-Custom-Header": "test-value",
+		},
 	}
 
 	// Call pingServer

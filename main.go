@@ -16,6 +16,7 @@ type Config struct {
 	ServerURL    string
 	OwnURL       string
 	PingInterval time.Duration
+	Headers      map[string]string // Custom headers for ping requests
 }
 
 var (
@@ -84,7 +85,19 @@ func startPinging(config Config) {
 func pingServer(config Config) {
 	log.Printf("Pinging server: %s\n", config.ServerURL)
 
-	resp, err := http.Get(config.ServerURL)
+	req, err := http.NewRequest("GET", config.ServerURL, nil)
+	if err != nil {
+		log.Printf("Error creating request: %v\n", err)
+		return
+	}
+
+	// Add custom headers if provided
+	for key, value := range config.Headers {
+		req.Header.Set(key, value)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("Error pinging server: %v\n", err)
 		return
