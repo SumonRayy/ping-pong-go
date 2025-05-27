@@ -1,4 +1,4 @@
-module ping-pong
+module ping-pong-go
 
 go 1.22.9
 

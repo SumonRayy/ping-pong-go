@@ -74,9 +74,9 @@ func validateEnv() error {
 }
 
 func printBanner() {
-	color.Cyan("=========================================")
-	color.Cyan("      Welcome to Ping-Pong Service       ")
-	color.Cyan("=========================================")
+	color.Cyan("================================================")
+	color.Cyan("      Welcome to Ping-Pong-Go Service           ")
+	color.Cyan("================================================")
 }
 
 // Start local test server
@@ -381,7 +381,7 @@ func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Fprintln(w, "Ping-Pong Server is healthy")
+	fmt.Fprintln(w, "Ping-Pong-Go Server is healthy")
 }
 
 func main() {
@@ -391,7 +391,7 @@ func main() {
 	// Setup command line flags
 	setupFlags()
 
-	logy("INFO", "Starting Ping-Pong Server...")
+	logy("INFO", "Starting Ping-Pong-Go Server...")
 
 	// Setup environment
 	if err := setupEnvironment(); err != nil {
