@@ -1,6 +1,6 @@
 module github.com/SumonRayy/ping-pong-go
 
-go 1.23.0
+go 1.23
 
 require (
 	github.com/fatih/color v1.15.0
