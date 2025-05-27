@@ -18,6 +18,10 @@ This service is configured via environment variables, supports `.env` files, and
 - Exposes a `/health` endpoint to report its health status.
 - Automatically calls its own health endpoint after successful pings.
 - Fully configurable via environment variables or `.env` files.
+- Supports custom headers for ping requests.
+- Includes a retry mechanism for failed pings.
+- Provides a local test server for easy testing.
+- Command-line flags for overriding environment variables.
 
 ---
 
@@ -39,6 +43,7 @@ The service reads configuration from environment variables or a `.env` file. The
 | `OWN_URL`      | The URL of the service's own `/health` endpoint.    | `http://localhost:8080/health` |
 | `PING_INTERVAL`| Interval between pings (in milliseconds).           | `60000`                     |
 | `PORT`         | (Optional) Port for the health check server.        | `8080`                      |
+| `MAX_RETRIES`  | Maximum number of retries for failed pings.         | `3`                         |
 
 ### Example `.env` File
 
@@ -47,6 +52,7 @@ SERVER_URL=https://example.com
 OWN_URL=http://localhost:8080/health
 PING_INTERVAL=60000
 PORT=8080
+MAX_RETRIES=3
 ```
 
 ---
@@ -66,6 +72,19 @@ PORT=8080
      - At least one successful ping has occurred.
      - The last successful ping was within the last 15 minutes.
    - Otherwise, returns `503 Service Unavailable`.
+
+4. **Retry Mechanism**:
+   - If a ping fails, the service will retry up to `MAX_RETRIES` times before giving up.
+
+5. **Local Test Server**:
+   - Run the service with the `-local` flag to start a local test server on port 8081.
+
+6. **Command-Line Flags**:
+   - Override environment variables using command-line flags:
+     - `-server-url`: Server URL to ping
+     - `-ping-interval`: Ping interval in milliseconds
+     - `-own-url`: Own health check URL
+     - `-max-retries`: Maximum number of retries
 
 ---
 
@@ -112,7 +131,7 @@ The service logs:
 - Calls to its own `/health` endpoint.
 - Errors encountered during operations.
 
-Logs are output to the console.
+Logs are output to the console with timestamps and colors.
 
 ---
 
