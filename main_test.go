@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"net/http"
 	"net/http/httptest"
@@ -70,38 +71,216 @@ func TestHealthCheckHandlerNoPing(t *testing.T) {
 
 // TestPingServer tests the pingServer function
 func TestPingServer(t *testing.T) {
-	// Set up a test server
+	// Create a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Test custom headers
+		if r.Header.Get("X-Custom-Header") != "test-value" {
+			t.Errorf("Expected custom header 'X-Custom-Header' with value 'test-value', got '%s'", r.Header.Get("X-Custom-Header"))
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
-	// Set environment variables for testing
-	os.Setenv("SERVER_URL", server.URL)
-	os.Setenv("PING_INTERVAL", "1000")
-	os.Setenv("OWN_URL", server.URL)
-	os.Setenv("MAX_RETRIES", "3")
-
-	// Create a Config struct
-	config := Config{
-		ServerURL:    server.URL,
-		PingInterval: 1 * time.Second,
-		OwnURL:       server.URL,
-		Headers:      map[string]string{"Custom-Header": "test"},
+	// Test cases
+	tests := []struct {
+		name           string
+		config         Config
+		expectedResult bool
+	}{
+		{
+			name: "Successful ping",
+			config: Config{
+				ServerURL: server.URL,
+				Headers: map[string]string{
+					"X-Custom-Header": "test-value",
+				},
+			},
+			expectedResult: true,
+		},
+		{
+			name: "Failed ping",
+			config: Config{
+				ServerURL: "http://invalid-url",
+			},
+			expectedResult: false,
+		},
 	}
 
-	// Test case 1: Successful ping
-	pingServer(config)
-	if atomic.LoadInt64(&lastPingSuccess) == 0 {
-		t.Errorf("Expected lastPingSuccess to be set")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := pingServer(tt.config)
+			if result != tt.expectedResult {
+				t.Errorf("Expected result %v, got %v", tt.expectedResult, result)
+			}
+		})
+	}
+}
+
+// TestStartPinging tests the startPinging function
+func TestStartPinging(t *testing.T) {
+	// Create a test server that fails consistently
+	failingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Always return 500 to ensure consistent failures
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer failingServer.Close()
+
+	// Create a test server that succeeds consistently
+	successServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Always return 200 to ensure consistent success
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer successServer.Close()
+
+	// Test cases
+	tests := []struct {
+		name             string
+		config           Config
+		expectedShutdown bool
+		timeout          time.Duration
+	}{
+		{
+			name: "Shutdown after max consecutive failures",
+			config: Config{
+				ServerURL:           failingServer.URL,
+				PingInterval:        100 * time.Millisecond,
+				MaxConsecutiveFails: 2,
+			},
+			expectedShutdown: true,
+			timeout:          5 * time.Second,
+		},
+		{
+			name: "Continue pinging with successful responses",
+			config: Config{
+				ServerURL:           successServer.URL,
+				PingInterval:        100 * time.Millisecond,
+				MaxConsecutiveFails: 10,
+			},
+			expectedShutdown: false,
+			timeout:          2 * time.Second,
+		},
 	}
 
-	// Test case 2: Failed ping with retry
-	server.Close() // Close the server to simulate a failure
-	pingServer(config)
-	// Check if the lastPingSuccess is still set
-	if atomic.LoadInt64(&lastPingSuccess) == 0 {
-		t.Errorf("Expected lastPingSuccess to be set after retry")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set MAX_RETRIES to 1 to speed up the test
+			originalMaxRetries := os.Getenv("MAX_RETRIES")
+			os.Setenv("MAX_RETRIES", "1")
+			defer func() {
+				if originalMaxRetries == "" {
+					os.Unsetenv("MAX_RETRIES")
+				} else {
+					os.Setenv("MAX_RETRIES", originalMaxRetries)
+				}
+			}()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			shutdownChan := make(chan struct{})
+			go startPinging(ctx, tt.config, shutdownChan)
+
+			// Wait for either shutdown or timeout
+			select {
+			case <-shutdownChan:
+				if !tt.expectedShutdown {
+					t.Error("Unexpected shutdown")
+				}
+			case <-time.After(tt.timeout):
+				if tt.expectedShutdown {
+					t.Error("Expected shutdown but did not receive it")
+				}
+			}
+		})
+	}
+}
+
+// TestConfigSetup tests the setupConfig function
+func TestConfigSetup(t *testing.T) {
+	// Test environment variable setup
+	tests := []struct {
+		name           string
+		envVars        map[string]string
+		expectedConfig Config
+		expectError    bool
+	}{
+		{
+			name: "Valid configuration",
+			envVars: map[string]string{
+				"SERVER_URL":            "http://test-server",
+				"PING_INTERVAL":         "1000",
+				"OWN_URL":               "http://own-server",
+				"MAX_CONSECUTIVE_FAILS": "5",
+			},
+			expectedConfig: Config{
+				ServerURL:           "http://test-server",
+				PingInterval:        1000 * time.Millisecond,
+				OwnURL:              "http://own-server",
+				MaxConsecutiveFails: 5,
+			},
+			expectError: false,
+		},
+		{
+			name: "Invalid max consecutive fails",
+			envVars: map[string]string{
+				"MAX_CONSECUTIVE_FAILS": "0",
+			},
+			expectError: true,
+		},
+		{
+			name: "Default max consecutive fails",
+			envVars: map[string]string{
+				"SERVER_URL":    "http://test-server",
+				"PING_INTERVAL": "1000",
+			},
+			expectedConfig: Config{
+				ServerURL:           "http://test-server",
+				PingInterval:        1000 * time.Millisecond,
+				MaxConsecutiveFails: 3, // Default value
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set environment variables
+			for k, v := range tt.envVars {
+				os.Setenv(k, v)
+			}
+			defer func() {
+				// Clean up environment variables
+				for k := range tt.envVars {
+					os.Unsetenv(k)
+				}
+			}()
+
+			config, err := setupConfig()
+			if tt.expectError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+
+			if config.ServerURL != tt.expectedConfig.ServerURL {
+				t.Errorf("Expected ServerURL %v, got %v", tt.expectedConfig.ServerURL, config.ServerURL)
+			}
+			if config.PingInterval != tt.expectedConfig.PingInterval {
+				t.Errorf("Expected PingInterval %v, got %v", tt.expectedConfig.PingInterval, config.PingInterval)
+			}
+			if config.OwnURL != tt.expectedConfig.OwnURL {
+				t.Errorf("Expected OwnURL %v, got %v", tt.expectedConfig.OwnURL, config.OwnURL)
+			}
+			if config.MaxConsecutiveFails != tt.expectedConfig.MaxConsecutiveFails {
+				t.Errorf("Expected MaxConsecutiveFails %v, got %v", tt.expectedConfig.MaxConsecutiveFails, config.MaxConsecutiveFails)
+			}
+		})
 	}
 }
 

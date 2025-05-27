@@ -1,4 +1,112 @@
-# Ping Pong Service
+# Ping-Pong-Go Service
+
+A robust health check service that pings a specified server and maintains its own health status.
+
+## Features
+
+- Configurable ping interval
+- Custom headers support
+- Automatic retry mechanism
+- Graceful shutdown
+- Health check endpoint
+- Local test server
+- Environment variable configuration
+- Command-line flag support
+- Configurable max consecutive failures
+- Colorful logging with timestamps
+
+## Installation
+
+```bash
+go get github.com/yourusername/ping-pong
+```
+
+## Configuration
+
+The service can be configured using environment variables or command-line flags.
+
+### Environment Variables
+
+- `SERVER_URL`: URL of the server to ping (default: "http://localhost:8081/health")
+- `PING_INTERVAL`: Interval between pings in milliseconds (default: "2000")
+- `OWN_URL`: URL of the service's own health check endpoint (default: "http://localhost:8080/health")
+- `MAX_RETRIES`: Maximum number of retries for each ping attempt (default: "3")
+- `MAX_CONSECUTIVE_FAILS`: Maximum number of consecutive failures before shutdown (default: "3")
+
+### Command-line Flags
+
+- `-local`: Start a local test server
+- `-server-url`: Server URL to ping
+- `-ping-interval`: Ping interval in milliseconds
+- `-own-url`: Own health check URL
+- `-max-retries`: Maximum number of retries
+- `-max-consecutive-fails`: Maximum number of consecutive failures before shutdown
+
+## Usage
+
+### Basic Usage
+
+```bash
+./ping-pong
+```
+
+### With Environment Variables
+
+```bash
+export SERVER_URL="http://example.com/health"
+export PING_INTERVAL="5000"
+export OWN_URL="http://localhost:8080/health"
+export MAX_RETRIES="5"
+export MAX_CONSECUTIVE_FAILS="3"
+./ping-pong
+```
+
+### With Command-line Flags
+
+```bash
+./ping-pong -server-url "http://example.com/health" -ping-interval "5000" -own-url "http://localhost:8080/health" -max-retries 5 -max-consecutive-fails 3
+```
+
+### Start Local Test Server
+
+```bash
+./ping-pong -local
+```
+
+## Health Check
+
+The service exposes a health check endpoint at `/health`. It returns:
+- `200 OK` if the service is healthy (last successful ping within 15 minutes)
+- `503 Service Unavailable` if the service is unhealthy
+
+## Automatic Shutdown
+
+The service will automatically shut down in the following scenarios:
+1. After reaching the maximum number of consecutive failures (configurable via `MAX_CONSECUTIVE_FAILS` or `-max-consecutive-fails`)
+2. When receiving a manual interrupt signal (Ctrl+C)
+
+## Testing
+
+Run the tests using:
+
+```bash
+go test -v
+```
+
+## Docker Support
+
+Build and run using Docker:
+
+```bash
+docker build -t ping-pong .
+docker run -p 8080:8080 ping-pong
+```
+
+## License
+
+MIT License - see LICENSE file for details
+
+---
 
 ## Overview
 
@@ -8,20 +116,6 @@ The Ping Pong Service is a Go application designed to:
 - Call its own `/health` endpoint after every successful ping to monitor its internal health.
 
 This service is configured via environment variables, supports `.env` files, and includes a health check API for external monitoring.
-
----
-
-## Features
-
-- Periodically sends HTTP `GET` requests to a target server.
-- Logs the status of each ping, including successes and failures.
-- Exposes a `/health` endpoint to report its health status.
-- Automatically calls its own health endpoint after successful pings.
-- Fully configurable via environment variables or `.env` files.
-- Supports custom headers for ping requests.
-- Includes a retry mechanism for failed pings.
-- Provides a local test server for easy testing.
-- Command-line flags for overriding environment variables.
 
 ---
 
