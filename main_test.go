@@ -129,3 +129,33 @@ func TestIntegration(t *testing.T) {
 		t.Fail()
 	}
 }
+
+// Add test for local test server
+func TestLocalTestServer(t *testing.T) {
+	// Start the local test server in a goroutine
+	go startLocalTestServer()
+
+	// Wait for the server to start
+	time.Sleep(1 * time.Second)
+
+	// Test the health endpoint
+	resp, err := http.Get("http://localhost:8081/health")
+	if err != nil {
+		t.Fatalf("Failed to connect to local test server: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %v, got %v", http.StatusOK, resp.StatusCode)
+	}
+
+	expected := "Local test server is healthy\n"
+	body := make([]byte, len(expected))
+	_, err = resp.Body.Read(body)
+	if err != nil && err.Error() != "EOF" {
+		t.Fatalf("Failed to read response body: %v", err)
+	}
+	if string(body) != expected {
+		t.Errorf("Expected body %v, got %v", expected, string(body))
+	}
+}
